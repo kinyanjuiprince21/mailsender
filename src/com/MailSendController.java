@@ -49,7 +49,7 @@ public class MailSendController implements Initializable {
     String from;
     private boolean sendMail(String from, String to, String subject, String body) {
 //        set the server details
-
+        boolean b = false;
 
         try {
 //            get the default comm.session or start a new one.
@@ -82,10 +82,11 @@ public class MailSendController implements Initializable {
 
 //            send the message
             Transport.send(message);
-            return true;
+            b = true;
         } catch (MessagingException e) {
-            return false;
+            b = false;
         }
+        return b;
     }
 
     public static String getText(String htmlText) {
@@ -128,7 +129,7 @@ public class MailSendController implements Initializable {
                         )
                 ),
                 new KeyFrame(
-                        Duration.seconds(5),
+                        Duration.seconds(1),
                         new KeyValue(
                                 label.opacityProperty(),
                                 1,
@@ -142,7 +143,7 @@ public class MailSendController implements Initializable {
     }
 
     private FadeTransition createFader(Label label) {
-        FadeTransition fade = new FadeTransition(Duration.seconds(10), label);
+        FadeTransition fade = new FadeTransition(Duration.seconds(30), label);
         fade.setFromValue(1);
         fade.setToValue(0);
 
@@ -172,9 +173,12 @@ public class MailSendController implements Initializable {
                         fader
                 );
                 blinkThenFade.play();
-            } else {
+                return;
+            }
+            if (!sendMail(from, to, subject, body)){
                 lblMessage.setText("Message not sent!");
                 lblMessage.setTextFill(Color.RED);
+                return;
             }
         });
     }
