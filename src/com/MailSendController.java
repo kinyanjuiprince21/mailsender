@@ -173,17 +173,8 @@ public class MailSendController implements Initializable {
                 );
                 blinkThenFade.play();
             } else {
+                lblMessage.setText("Message not sent!");
                 lblMessage.setTextFill(Color.RED);
-                Timeline blinker = createBlinker(lblMessage);
-                blinker.setOnFinished(event -> lblMessage.setText("Message not sent!"));
-                FadeTransition fader = createFader(lblMessage);
-
-                SequentialTransition blinkThenFade = new SequentialTransition(
-                        lblMessage,
-                        blinker,
-                        fader
-                );
-                blinkThenFade.play();
             }
         });
     }
