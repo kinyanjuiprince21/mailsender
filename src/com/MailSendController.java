@@ -2,27 +2,35 @@ package com;
 
 
 import javafx.animation.*;
+import javafx.application.Platform;
+import javafx.concurrent.Task;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
+import javafx.geometry.Insets;
+import javafx.geometry.Pos;
+import javafx.scene.Cursor;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
+import javafx.scene.image.Image;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
-import javafx.scene.paint.Paint;
 import javafx.scene.web.HTMLEditor;
+import javafx.stage.FileChooser;
+import javafx.stage.Stage;
 import javafx.util.Duration;
-import org.jsoup.Jsoup;
 
+import javax.activation.DataHandler;
+import javax.activation.DataSource;
+import javax.activation.FileDataSource;
 import javax.mail.*;
-import javax.mail.internet.InternetAddress;
-import javax.mail.internet.MimeMessage;
+import javax.mail.internet.*;
+import javafx.scene.image.ImageView;
+import java.io.File;
 import java.net.URL;
-import java.util.Date;
-import java.util.Properties;
-import java.util.ResourceBundle;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.*;
 
 public class MailSendController implements Initializable {
 
@@ -36,6 +44,9 @@ public class MailSendController implements Initializable {
     private HTMLEditor htmEditor;
 
     @FXML
+    private VBox VboxAttach;
+
+    @FXML
     private TextField txtFrom;
 
     @FXML
@@ -47,9 +58,12 @@ public class MailSendController implements Initializable {
     @FXML
     private TextField txtTo;
     String from;
+
+    List<File> files = new ArrayList<>();
     private boolean sendMail(String from, String to, String subject, String body) {
 //        set the server details
         boolean b = false;
+        SendMail details = new SendMail(from, to, subject, body);
 
         try {
 //            get the default comm.session or start a new one.
@@ -68,16 +82,16 @@ public class MailSendController implements Initializable {
                 }
             });
 //            create a new message
-            Message message = new MimeMessage(session);
-//            set the message fields
-            message.setFrom(new InternetAddress(from));
-            message.setRecipients(Message.RecipientType.TO, InternetAddress.parse(to, false));
+            Message message = createText(session, details);
 
-//            set the message subject and body
-            message.setSubject(subject);
-            message.setText(body);
+            Multipart multipart = new MimeMultipart();
 
-//            set other header information
+            files.forEach(file -> {
+                addAttachment(multipart, file);
+            });
+            message.setContent(multipart);
+
+
             message.setSentDate(new Date());
 
 //            send the message
@@ -89,25 +103,24 @@ public class MailSendController implements Initializable {
         return b;
     }
 
-    public static String getText(String htmlText) {
+    public static Message createText(Session session, SendMail details) {
+        Message message = null;
+        try {
 
-        String result = "";
-
-        Pattern pattern = Pattern.compile("<[^>]*>");
-        Matcher matcher = pattern.matcher(htmlText);
-        final StringBuffer text = new StringBuffer(htmlText.length());
-
-        while (matcher.find()) {
-            matcher.appendReplacement(
-                    text,
-                    " ");
+            message = new MimeMessage(session);
+            message.setFrom(new InternetAddress(details.from));
+            message.setRecipient(Message.RecipientType.TO, new InternetAddress(details.to));
+            message.setSubject(details.subject);
+            String msg = details.body;
+            message.setContent(msg, "text/html");
+        } catch (AddressException e) {
+            e.printStackTrace();
+        } catch (MessagingException e) {
+            e.printStackTrace();
         }
 
-        matcher.appendTail(text);
+        return message;
 
-        result = text.toString().trim();
-
-        return result;
     }
 
     public Timeline createBlinker(Label label) {
@@ -150,36 +163,163 @@ public class MailSendController implements Initializable {
         return fade;
     }
 
-    //    public static String html2text(String html) {
-//        return Jsoup.parse(html).text();
-//    }
+
+
+    public File filePath() {
+        Stage stage = new Stage();
+        FileChooser fileChooser = new FileChooser();
+        File file = fileChooser.showOpenDialog(stage);
+        if(file == null) {
+            return null;
+        }
+        VboxAttach.getChildren().add(attachedFile(file.getName()));
+        return  file;
+    }
+
+    public Node attachedFile(String fileName){
+        HBox hbox = new HBox();
+        String extension = fileName.split("\\.")[fileName.split("\\.").length - 1].toLowerCase();
+        System.out.println(extension);
+        Image image;
+        switch (extension) {
+            case "pdf" :
+                image = new Image("/com/resource/pdf.png");
+                break;
+            case "docx":
+            case "odt":
+                image = new Image("/com/resource/docx-file.png");
+                break;
+            case "png":
+            case "jpg":
+            case "jpeg":
+                image = new Image("/com/resource/picture.png");
+                break;
+            case "xls":
+            case "xlsx":
+            case "xlsm":
+            case "xlsb":
+                image = new Image("/com/resource/sheets.png");
+                break;
+            case "mp4":
+            case "mkv":
+                image = new Image("/com/resource/clapperboard.png");
+                break;
+            default:
+               image =  new Image("/com/resource/data-storage.png");
+                break;
+        }
+        System.out.println(image.getUrl());
+        ImageView imageView = new ImageView(image);
+        ImageView btnGraphic = new ImageView(new Image("/com/resource/cancel.png"));
+        Label label = new Label(fileName);
+        label.setPrefWidth(300.0);
+        Button btnDelete = new Button();
+        btnDelete.setGraphic(btnGraphic);
+        btnGraphic.setFitWidth(20.0);
+        btnGraphic.setFitHeight(20.0);
+        btnDelete.setStyle("-fx-background-color: transparent");
+        btnDelete.setCursor(Cursor.HAND);
+        btnDelete.setOnAction(e -> {
+            removeFile(fileName);
+        });
+        imageView.setFitWidth(20.0);
+        imageView.setFitHeight(20.0);
+        Insets insets = new Insets(10);
+        hbox.setPadding(insets);
+        hbox.setSpacing(15.0);
+
+        hbox.getChildren().addAll(imageView, label, btnDelete);
+        hbox.setAlignment(Pos.CENTER_LEFT);
+        hbox.setPrefWidth(370.0);
+        hbox.widthProperty().addListener((observable, oldVal, newVal) -> {
+            if((double)newVal > 300)
+            label.setPrefWidth((double)newVal - 60.0);
+        });
+        return hbox;
+    }
+
+    public void removeFile(String fileName) {
+            files.removeIf(f -> {
+                boolean test = f.getName().equals(fileName);
+                return test;
+            });
+            reloadAttachment();
+    }
+
+    public void reloadAttachment() {
+        VboxAttach.getChildren().clear();
+
+        files.forEach(file -> {
+            VboxAttach.getChildren().add(attachedFile(file.getName()));
+        });
+    }
     @Override
     public void initialize(URL location, ResourceBundle resources) {
+        btnAttach.setStyle("-fx-background-color: transparent");
+
         btnSend.setOnAction(e -> {
-            String from = txtFrom.getText();
-            String to = txtTo.getText();
-            String subject = txtSubject.getText();
-            String body = getText(htmEditor.getHtmlText());
 
-            if(sendMail(from, to, subject, body)) {
-                lblMessage.setTextFill(Color.GREEN);
-                Timeline blinker = createBlinker(lblMessage);
-                blinker.setOnFinished(event -> lblMessage.setText("Message sent successfully!"));
-                FadeTransition fader = createFader(lblMessage);
+            Task<Void> task = new Task<Void>() {
+                @Override
+                protected Void call() throws Exception {
+                    String from = txtFrom.getText();
+                    String to = txtTo.getText();
+                    String subject = txtSubject.getText();
+                    String body = htmEditor.getHtmlText();
+                    System.out.println(body);
 
-                SequentialTransition blinkThenFade = new SequentialTransition(
-                        lblMessage,
-                        blinker,
-                        fader
-                );
-                blinkThenFade.play();
-                return;
-            }
-            if (!sendMail(from, to, subject, body)){
-                lblMessage.setText("Message not sent!");
-                lblMessage.setTextFill(Color.RED);
-                return;
-            }
+                    if(sendMail(from, to, subject, body)) {
+                        System.out.println("success");
+                        Platform.runLater(() -> {
+                            lblMessage.setTextFill(Color.GREEN);
+                            Timeline blinker = createBlinker(lblMessage);
+                            blinker.setOnFinished(event -> lblMessage.setText("Message sent successfully!"));
+                            FadeTransition fader = createFader(lblMessage);
+
+                            SequentialTransition blinkThenFade = new SequentialTransition(
+                                    lblMessage,
+                                    blinker,
+                                    fader
+                            );
+                            blinkThenFade.play();
+                        });
+                        return null;
+                    }
+                    System.out.println("error");
+
+                    Platform.runLater(() -> {
+                        lblMessage.setText("Message not sent!");
+                        lblMessage.setTextFill(Color.RED);
+                    });
+                    return null;
+                }
+
+                @Override
+                protected void succeeded() {
+                    super.succeeded();
+                    System.out.println("finished");
+                }
+            };
+            new Thread(task).start();
+
         });
+        btnAttach.setOnAction(e  -> {
+            files.add(filePath());
+        });
+    }
+
+    public void addAttachment(Multipart multipart, File file) {
+        MimeBodyPart messageBodyPart = new MimeBodyPart();
+
+        String filePath = file.getAbsolutePath();
+        String fileName = file.getName();
+        DataSource source = new FileDataSource(filePath);
+        try {
+            messageBodyPart.setDataHandler(new DataHandler(source));
+            messageBodyPart.setFileName(fileName);
+            multipart.addBodyPart(messageBodyPart);
+        } catch (MessagingException e) {
+            e.printStackTrace();
+        }
     }
 }
